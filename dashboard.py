@@ -1,5 +1,9 @@
 """Public read-only market dashboard. Never loads private trading credentials."""
 import json
+import io
+import urllib.request
+import urllib.error
+import zipfile
 from pathlib import Path
 import pandas as pd
 import streamlit as st
@@ -62,8 +66,66 @@ def chart_data(symbol, daily, choice):
     n = SESSIONS[choice]
     return daily["Close"].tail(n + 1), "Daily closing prices"
 
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_private_signals(token):
+    """Read only latest valid completed V6 report. Token never leaves server."""
+    api = "https://api.github.com/repos/royrockman2005-dot/alpaca-ai-trading-bot/actions/artifacts?per_page=50"
+    headers = {"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json", "User-Agent": "private-streamlit-research-viewer"}
+    request = urllib.request.Request(api, headers=headers)
+    with urllib.request.urlopen(request, timeout=20) as response:
+        artifacts = json.load(response).get("artifacts", [])
+    artifacts = sorted((a for a in artifacts if not a.get("expired") and a.get("name", "").startswith("v6-research-")), key=lambda a: a.get("created_at", ""), reverse=True)
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, hdrs, newurl):
+            return None
+    for artifact in artifacts[:8]:
+        try:
+            request = urllib.request.Request(artifact["archive_download_url"], headers=headers)
+            try:
+                urllib.request.build_opener(NoRedirect).open(request, timeout=20)
+                continue
+            except urllib.error.HTTPError as redirect:
+                if redirect.code not in (301, 302, 303, 307, 308):
+                    continue
+                url = redirect.headers.get("Location", "")
+                if not url.startswith("https://"):
+                    continue
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "private-streamlit-research-viewer"}), timeout=30) as response:
+                raw = response.read(10_000_001)
+            if len(raw) > 10_000_000:
+                continue
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                paths = sorted((p for p in archive.namelist() if p.split("/")[-1].startswith("signals_") and p.endswith(".json")), reverse=True)
+                for path in paths:
+                    if archive.getinfo(path).file_size > 1_000_000:
+                        continue
+                    record = json.loads(archive.read(path))
+                    if record.get("research_only") is not True or record.get("v5_exit_code") != 0:
+                        continue
+                    timestamp = record.get("timestamp_utc")
+                    result = {}
+                    for entry in record.get("signals", []):
+                        symbol = entry.get("symbol")
+                        decision = entry.get("decision")
+                        if isinstance(symbol, str) and symbol.isalpha() and symbol.isupper() and len(symbol) <= 5 and decision in ("BUY", "HOLD", "SELL"):
+                            result[symbol] = {"decision": decision, "updated_at": timestamp}
+                    return result, timestamp
+        except (ValueError, OSError, KeyError, urllib.error.URLError, zipfile.BadZipFile):
+            continue
+    return {}, None
+
 def public_signals():
-    # Optional, deliberately public-only, sanitized export. No secrets or private API requests.
+    try:
+        token = st.secrets.get("GITHUB_READ_TOKEN", "")
+    except Exception:
+        token = ""
+    if token:
+        try:
+            return fetch_private_signals(token)
+        except Exception:
+            st.sidebar.warning("Private research feed unavailable. Check read-only token access.")
+            return {}, None
+    # No token: use only an explicitly published sanitized snapshot.
     path = Path(__file__).with_name("signals_public.json")
     if not path.is_file():
         return {}, None
