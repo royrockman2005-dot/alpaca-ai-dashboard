@@ -36,20 +36,24 @@ with overview:
     st.info("Live bot health and research reports require a separate authenticated connection.")
 with stocks:
     st.subheader("Stock charts")
-    ticker = st.selectbox("Ticker", symbols, index=0)
     period = st.selectbox("Historical range", ["1mo", "3mo", "6mo", "1y", "2y"], index=2)
-    try:
-        df = prices(ticker, period)
-        if df.empty:
-            st.error("Market data unavailable right now. Please try again later.")
-        else:
-            last = df.iloc[-1]
-            st.metric(f"{ticker} latest available close", f"${float(last['Close']):,.2f}")
-            st.line_chart(df.set_index("Date")["Close"], y_label="USD")
-            with st.expander("Historical prices"):
-                st.dataframe(df[["Date", "Open", "High", "Low", "Close", "Volume"]].tail(30).sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
-    except Exception:
-        st.error("Could not load market data from the public provider. Try again shortly.")
+    chosen = st.multiselect("Show stocks", symbols, default=["SPY", "QQQ", "AAPL", "NVDA"], max_selections=6)
+    if not chosen:
+        st.info("Choose at least one symbol to display charts.")
+    else:
+        for i, ticker in enumerate(chosen):
+            try:
+                df = prices(ticker, period)
+                if df.empty:
+                    st.warning(f"{ticker}: market data unavailable.")
+                    continue
+                st.markdown(f"#### {ticker}")
+                st.metric("Latest available close", f"${float(df['Close'].iloc[-1]):,.2f}")
+                st.line_chart(df.set_index("Date")["Close"], y_label="USD")
+                with st.expander(f"{ticker} historical prices"):
+                    st.dataframe(df[["Date", "Open", "High", "Low", "Close", "Volume"]].tail(30).sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
+            except Exception:
+                st.warning(f"{ticker}: could not load prices right now.")
 with gemini:
     st.subheader("Gemini Signals")
     st.info("No real AI signals are connected. We will only show them here after choosing a secure sharing method.")
