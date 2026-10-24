@@ -150,7 +150,7 @@ def signal_label(symbol):
         return "אין אות זמין", None
     return mapping[raw], entry.get("updated_at") or signals_time
 
-overview, stocks, gemini, lab, history = st.tabs(["Overview", "Stocks", "Gemini Signals", "Strategy Lab", "History"])
+overview, stocks, gemini, lab, history, replay_tab = st.tabs(["Overview", "Stocks", "Gemini Signals", "Strategy Lab", "History", "Replay Lab"])
 with overview:
     st.subheader("Market overview")
     cols = st.columns(3)
@@ -214,5 +214,31 @@ with lab:
 with history:
     st.subheader("History")
     st.info("Private GitHub Actions run logs are not connected.")
+with replay_tab:
+    st.subheader("V6.7 — Historical replay")
+    st.caption("מחקר בלבד: החלטות לפי נרות של 5 דקות שהושלמו לפני זמן הבדיקה. ללא Gemini היסטורי וללא מסחר.")
+    replay_symbol = st.selectbox("בחר מניה לבדיקה", SYMBOLS, index=4, key="replay_symbol")
+    st.caption("הנתונים מגיעים מ-Yahoo Finance; זמינות נרות של 5 דקות מוגבלת בדרך כלל לתקופה האחרונה.")
+    if st.button("הרץ מבחן היסטורי", key="run_replay"):
+        try:
+            from datetime import timedelta
+            from v67_point_in_time import replay
+            from v67_batch_replay import batch_replay, summary
+            data = intraday_prices(replay_symbol)
+            if data.empty:
+                st.warning("לא התקבלו נתוני 5 דקות למניה.")
+            else:
+                bars = [(ts.to_pydatetime(), float(row["Open"]), float(row["High"]),
+                         float(row["Low"]), float(row["Close"])) for ts, row in data.iterrows()]
+                outcomes = batch_replay(bars, step=6)
+                report = summary(outcomes)
+                a, b, c = st.columns(3)
+                a.metric("החלטות קנייה", report["buy_decisions"])
+                b.metric("אחוז עסקאות רווחיות", f'{report["win_rate_pct"]:.1f}%' if report["win_rate_pct"] is not None else "אין מספיק נתונים")
+                c.metric("תשואה ממוצעת נטו", f'{report["avg_net_pct"]:+.2f}%' if report["avg_net_pct"] is not None else "—")
+                st.json(report)
+                st.caption("זה אינו מבחן מדויק של הבוט עם Gemini. מדגם קטן ואותה תקופת שוק אינם הוכחה ליתרון מסחרי.")
+        except Exception as exc:
+            st.error(f"Replay unavailable: {type(exc).__name__}")
 st.divider()
 st.caption("Market data: Yahoo Finance via yfinance • No trading functionality • Not financial advice")
