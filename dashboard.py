@@ -242,9 +242,41 @@ with gemini:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     st.caption("AI signals are research outputs, not investment advice or confirmed profitability.")
 with lab:
-    st.subheader("Strategy Lab")
-    st.info("Private strategy tests are not automatically published.")
-    st.caption("Historical backtests do not guarantee future performance.")
+    st.subheader("Strategy Lab — השוואה לשוק")
+    st.caption("השוואה היסטורית של קנייה והחזקה בלבד; אינה מייצגת ביצועים של הבוט.")
+    benchmark_choice = st.selectbox("טווח בדיקה", ["חודש", "3 חודשים", "חצי שנה", "שנה"], index=1, key="benchmark_period")
+    benchmark_symbols = st.multiselect("מניות להשוואה מול SPY", SYMBOLS[2:], default=["AAPL", "NVDA"], max_selections=5, key="benchmark_symbols")
+    n = SESSIONS[benchmark_choice]
+    comparisons = {}
+    for symbol in ["SPY"] + benchmark_symbols:
+        try:
+            df = daily_prices(symbol)
+            if len(df) >= n + 1:
+                series = df["Close"].tail(n + 1).reset_index(drop=True)
+                comparisons[symbol] = (series / float(series.iloc[0]) - 1) * 100
+        except Exception:
+            pass
+    if "SPY" in comparisons:
+        frame = pd.DataFrame(comparisons)
+        st.line_chart(frame, y_label="תשואה מצטברת (%)")
+        st.dataframe(pd.DataFrame([
+            {"מניה": symbol, "תשואת קנייה והחזקה": f"{float(values.iloc[-1]):+.2f}%",
+             "פער מול SPY": f"{float(values.iloc[-1] - comparisons['SPY'].iloc[-1]):+.2f}%"}
+            for symbol, values in comparisons.items()
+        ]), use_container_width=True, hide_index=True)
+        st.caption("ההשוואה לפי מספר ימי מסחר, לא תאריכי התחלה מדויקים; לא כולל עלויות מסחר. מניות עם נתונים חסרים מושמטות.")
+    else:
+        st.warning("נתוני SPY אינם זמינים כעת.")
+    st.divider()
+    st.subheader("V6.8 — סיכום מבחן היסטורי")
+    st.caption("תוצאות מדווחות מהרצה קודמת של 15.09.2026, לא נתונים חיים. Gemini נכשל בהרצה זו.")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("מניות שנבדקו", "100")
+    c2.metric("עסקאות טכניות", "38")
+    c3.metric("תשואה ממוצעת נטו", "-0.0201%")
+    st.info("18 מתוך 38 עסקאות היו רווחיות (47.4%). Gemini: 0 החלטות מאומתות מתוך 10 ניסיונות. המדגם הוא יום אחד בלבד.")
+    st.warning("אין להסיק מהמדגם יתרון מסחרי או תשואה צפויה. הנתונים ההיסטוריים אינם מסונכרנים אוטומטית.")
+
 with history:
     st.subheader("History")
     st.info("Private GitHub Actions run logs are not connected.")
