@@ -165,6 +165,40 @@ with overview:
             cols[i].metric(symbol, "Unavailable")
     st.info("Bot status and account data are not connected to this public site.")
 
+with st.expander("🧠 AI Agent Pipeline — מפת המערכת", expanded=False):
+    st.caption("מפת ארכיטקטורה להמחשה בלבד. סטטוסים חיים אינם מחוברים לאתר הציבורי.")
+    st.graphviz_chart("""digraph pipeline {
+        rankdir=LR;
+        graph [bgcolor="transparent", pad="0.2"];
+        node [shape=box, style="rounded,filled", fillcolor="#17263b", fontcolor="white", color="#334155", fontsize=12];
+        edge [color="#64748b"];
+        market [label="Market Data"];
+        scan [label="100 Stock Scanner"];
+        technical [label="Technical Strategy"];
+        news [label="News + Smart Money"];
+        gemini [label="Gemini Review"];
+        risk [label="Risk Controls"];
+        paper [label="Paper Research - NO ORDERS"];
+        replay [label="Historical Replay"];
+        market -> scan -> technical;
+        technical -> gemini;
+        news -> gemini;
+        gemini -> risk -> paper;
+        market -> replay;
+        replay -> gemini [style=dashed];
+    }""", use_container_width=True)
+    st.info("תרשים להמחשה בלבד. עדיין אין מערכת ניטור חיה או שיפור עצמי מאומת.")
+
+with st.expander("🔎 Agent Health — אבחון רכיבים", expanded=False):
+    st.caption("מצב רכיבים לפי המבחנים האחרונים, לא ניטור בזמן אמת.")
+    st.dataframe(pd.DataFrame([
+        {"רכיב":"Historical data", "מצב":"100 מניות עם נתונים", "פעולה הבאה":"בדיקות במספר תאריכים"},
+        {"רכיב":"Technical replay", "מצב":"מחקר פעיל", "פעולה הבאה":"Walk-forward ומדדי סיכון"},
+        {"רכיב":"Gemini historical review", "מצב":"שגיאת API בהרצה האחרונה", "פעולה הבאה":"אבחון קוד השגיאה בדוח V6.8"},
+        {"רכיב":"Live execution", "מצב":"כבוי", "פעולה הבאה":"לא להפעיל ללא בקרות"},
+    ]), use_container_width=True, hide_index=True)
+    st.warning("כשל Gemini אינו אות מסחר. אין להציג החלטה כאילו התקבלה ממנו.")
+
 with stocks:
     st.subheader("Stock charts and performance")
     choice = st.segmented_control("תקופה להשוואה", list(PERIODS), default="יום")
